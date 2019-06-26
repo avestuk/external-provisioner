@@ -25,7 +25,7 @@ import (
 	"strings"
 	"time"
 
-	"k8s.io/api/core/v1"
+	v1 "k8s.io/api/core/v1"
 	"k8s.io/apimachinery/pkg/api/resource"
 	_ "k8s.io/apimachinery/pkg/util/json"
 
@@ -194,13 +194,21 @@ func logGRPC(ctx context.Context, method string, req, reply interface{}, cc *grp
 }
 
 func Connect(address string, timeout time.Duration) (*grpc.ClientConn, error) {
+
 	glog.V(2).Infof("Connecting to %s", address)
 	dialOptions := []grpc.DialOption{
 		grpc.WithInsecure(),
 		grpc.WithBackoffMaxDelay(time.Second),
 		grpc.WithUnaryInterceptor(logGRPC),
 	}
+
 	if strings.HasPrefix(address, "/") {
+		// Check that the socket file actually exists
+		if _, err := os.Stat(address); os.IsNotExist(err) {
+			glog.V(1).Infof("CSI socket file: %s does not exist", address)
+			return nil, err
+		}
+
 		dialOptions = append(dialOptions, grpc.WithDialer(func(addr string, timeout time.Duration) (net.Conn, error) {
 			return net.DialTimeout("unix", addr, timeout)
 		}))
